@@ -3,7 +3,7 @@
 #include <stdio.h>
 
 
-// Ultrasonic Sensor Pins
+// Ultrasonwsic Sensor Pins
 const int trigger_pin = 11; //23;
 const int echo_pin = 10; //22;
 const float stopping_distance = 8.0; // cm
@@ -24,45 +24,57 @@ const int fwd_2 = 5;//2;
 const int BT_TX = 18;
 const int BT_RX = 19;
 
-// Joystick Pins
-const int SW_pin = 2;
-const int X_pin = 3;
-const int Y_pin = 4;
+//// Joystick Pins
+//const int SW_pin = 2;
+//const int X_pin = 3;
+//const int Y_pin = 4;
 
 // Further Useful Variables
 float dist = 0;
 float joystick_X = 0.0;
 float joystick_Y = 0.0;
 float minval_range = 2.0;
+char input;
+
+// ROS Stuff
+ros::NodeHandle nh;
+
+void velCallback(const geometry_msgs::Twist& vel){
+  Serial.print((float)vel.linear.x);
+  Serial.println();
+}
+
+ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", velCallback);
 
 void setup(){
   Serial.begin(9600);
   set_inputs(fwd_1, fwd_2, rev_1, rev_2, en_1, en_2, BT_RX, 
               echo_pin);
   set_outputs(BT_RX, trigger_pin);
+
+  //nh.initNode();
+  //nh.subscribe(sub);
+  
 }
 
 void loop() {
-  dist = distance(trigger_pin, echo_pin);
-  //Serial.print(dist);
-  //Serial.print("cm");
-  //Serial.println();
-
+  dist = distance();
+  Serial.print("~");
+  Serial.print(dist);
+  Serial.print("cm  -  ");
+  //nh.spinOnce();
+  
   if(free_path(dist)){
-    joystick_to_movement();
+    if(Serial.available()){
+      input = Serial.read();
+    }
   }
   else{
-    if(emergency_stop(dist)){
-      reverse();
-    }
-    else{
-      hold();
-    }
+    input = 'x';   
   }
-  joystick_input();
-  delay(250);
+  keyboard_to_movement(input);
+  delay(20);
   
-
 }
 
 template<typename T>
@@ -116,8 +128,7 @@ void turn_right(){
 }
 
 void reverse(){
-
-  set_low(rev_1, rev_2);
+  hold();
   digitalWrite(rev_1, HIGH);
   digitalWrite(rev_2, HIGH);
 }
@@ -126,6 +137,7 @@ void hold(){
 
   set_low(fwd_1, fwd_2);
   set_low(rev_1, rev_2);
+  set_low(en_1, en_2);
 }
 
 double microsecondsToCentimeters(double microseconds) {
@@ -133,17 +145,18 @@ double microsecondsToCentimeters(double microseconds) {
 }
 
 
-float distance(const int trigger, const int echo){
+float distance(){
 
   float duration, cm;
 
   //pinMode(trigger, OUTPUT);
-  digitalWrite(trigger, LOW);
-  digitalWrite(trigger, HIGH);
-  digitalWrite(trigger, LOW);
+  digitalWrite(trigger_pin, LOW);
+  digitalWrite(trigger_pin, HIGH);
+  digitalWrite(trigger_pin, LOW);
 
   //pinMode(echo, INPUT);
-  duration = pulseIn(echo, HIGH);
+  duration = pulseIn(echo_pin, HIGH);
+  
   cm = microsecondsToCentimeters(duration);
 
   return cm;
@@ -167,42 +180,67 @@ bool free_path(float distance){
   }
 }
 
-void joystick_to_movement(){
+void keyboard_to_movement(char input){
 
-  read_joystick();
-  
-  if(joystick_X > minval_range && -minval_range < joystick_Y < minval_range){
-    turn_right();
-    Serial.print("Right");
-  }
-  else if(joystick_X < -minval_range && -minval_range < joystick_Y < minval_range){
-    turn_left();
-    Serial.print("Left");
-  }
-  else if(-minval_range < joystick_X < minval_range && joystick_Y > minval_range){
+  if(input == 'w'){
     forward();
-    Serial.print("Forward");
+    Serial.print("^");
   }
-  else if(-minval_range < joystick_X < minval_range && joystick_Y < -minval_range){
+  else if(input == 's'){
     reverse();
-    Serial.print("Backward");
+    Serial.print("v");
   }
-  else{
+  else if(input == 'a'){
+    turn_left();
+    Serial.print("<");
+  }
+  else if(input == 'd'){
+    turn_right();
+    Serial.print(">");
+  }
+  else {
     hold();
-    Serial.print("Holding");
-    
-  }
+    Serial.print("X");
+  }  
   Serial.println();
 }
 
-void read_joystick(){
-  joystick_X = ((float)analogRead(X_pin) - 512)/52.15;
-  joystick_Y = ((float)analogRead(Y_pin) - 512)/-52.13;
-}
-
-void joystick_input(){
-  Serial.print(joystick_X);
-  Serial.print(" - ");
-  Serial.print(joystick_Y);
-  Serial.println();
-}
+//void joystick_to_movement(){
+//
+//  read_joystick();
+//  
+//  if(joystick_X > minval_range && -minval_range < joystick_Y < minval_range){
+//    turn_right();
+//    Serial.print("Right");
+//  }
+//  else if(joystick_X < -minval_range && -minval_range < joystick_Y < minval_range){
+//    turn_left();
+//    Serial.print("Left");
+//  }
+//  else if(-minval_range < joystick_X < minval_range && joystick_Y > minval_range){
+//    forward();
+//    Serial.print("Forward");
+//  }
+//  else if(-minval_range < joystick_X < minval_range && joystick_Y < -minval_range){
+//    reverse();
+//    Serial.print("Backward");
+//  }
+//  else{
+//    hold();
+//    Serial.print("Holding");
+//    
+//  }
+//  Serial.println();
+//}
+//
+//void read_joystick(){
+//  joystick_X = ((float)analogRead(X_pin) - 512)/52.15;
+//  joystick_Y = ((float)analogRead(Y_pin) - 512)/-52.13;
+//}
+//
+//void joystick_input(){
+//  Serial.print(joystick_X);
+//  Serial.print(" - ");
+//  Serial.print(joystick_Y);
+//  Serial.println();
+//}
