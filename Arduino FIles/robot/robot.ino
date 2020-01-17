@@ -39,37 +39,57 @@ ros::NodeHandle nh;
 std_msgs::String str_msg;
 ros::Publisher chatter("chatter", &str_msg);
 
-int x;
-int y; 
+int vx = 0;
+int vy = 0;
+int vz = 0; 
+
+int ax = 0;
+int ay = 0;
+int az = 0;
 
 char buffer[100];
 
 void velCallback(  const geometry_msgs::Twist& vel)
     {
-        x = (int)(vel.linear.x*1000);
-        y = vel.linear.y;
+        vx = (int)(vel.linear.x*255);
+        vy = (int)(vel.linear.y*255);
+        vz = (int)(vel.linear.z*255);
 
+        ax = (int)(vel.angular.x*255);
+        ay = (int)(vel.angular.y*255);
+        az = (int)(vel.angular.z*255);
+      
         nh.loginfo("Method Called");
-        snprintf ( buffer, 100, "X = %d", x);
+        snprintf ( buffer, 100, "(Vx, Vy, Vz) = (%d, %d, %d)", vx, vy, vz);
+        nh.loginfo(buffer);
+        snprintf ( buffer, 100, "(ax, ay, az) = (%d, %d, %d)", ax, ay, az);
         nh.loginfo(buffer);
         
-        if (x > 1) //Forward move.
+        if (vx >= 1 && az == 0) //Forward move.
           {
-          //set_low(fwd_1, fwd_2);
           set_low(rev_1, rev_2);
           forward();
-          nh.loginfo("LED");
-          digitalWrite(LED_pin, HIGH);
-          delay(250);
-          digitalWrite(LED_pin, LOW);
           }
-        else if (x < -1)   //Backward move
+        else if (vx <= -1 && az == 0)   //Backward move
         {
+           set_low(fwd_1, fwd_2);
            reverse();
         }
-        else 
+        else if(-1 < vx < 1 && az == 0)
         {
+           set_low(rev_1, rev_2);
+           set_low(fwd_1, fwd_2);
            hold();
+        }
+        else if(az >= 1 && vx == 0){
+          set_low(rev_1, rev_2);
+          set_low(fwd_1, fwd_2);
+          turn_left();
+        }
+        else if(az <= -1 && vx == 0){
+          set_low(rev_1, rev_2);
+           set_low(fwd_1, fwd_2);
+          turn_right();
         }
 }
 
@@ -77,20 +97,22 @@ ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", velCallback);
 
 
 void setup(){
+ 
+  nh.initNode();
+  nh.subscribe(sub);
 
   set_inputs( fwd_1, fwd_2, 
               rev_1, rev_2, 
               en_1, en_2, 
               BT_RX, 
-              echo_pin, LED_pin);
+              echo_pin, LED_pin
+  );
               
   set_outputs(BT_RX, trigger_pin);
-  
+
   set_low(rev_1, rev_2);
   set_low(fwd_1, fwd_2);
   
-  nh.initNode();
-  nh.subscribe(sub);
   digitalWrite(en_1, HIGH);
   digitalWrite(en_2, HIGH);
 }
@@ -99,8 +121,9 @@ void setup(){
 
 void loop() {
   dist = distance();
-  snprintf ( buffer, 100, "D = %f", dist);
-  nh.loginfo(buffer);
+  //snprintf ( buffer, 100, "D = %d [mm]", (int)(dist*100));
+  //nh.loginfo(buffer);
+  
   //analogWrite(fwd_1, 255);
   //analogWrite(fwd_2, 255);
   
@@ -133,39 +156,40 @@ void set_outputs(T first, Pins... pins){
 }
 
 void set_low(const int pin_1, const int pin_2){
-  digitalWrite(pin_1, LOW);
-  digitalWrite(pin_2, LOW);
+  analogWrite(pin_1, 0);
+  analogWrite(pin_2, 0);
 }
+
 
 void forward(){
   hold();
-  digitalWrite(fwd_1, HIGH);
-  digitalWrite(fwd_2, HIGH);
+  analogWrite(fwd_1, vx);
+  analogWrite(fwd_2, vx);
 }
 
 void turn_left(){
   hold();
-  digitalWrite(rev_1, HIGH);
-  digitalWrite(fwd_2, HIGH);
-
+  analogWrite(rev_1, -1*vx);
+  analogWrite(fwd_2, 0);
 }
 
 void turn_right(){
   hold();
-  digitalWrite(rev_2, HIGH);
-  digitalWrite(fwd_1, HIGH);
+  analogWrite(rev_2, -1*vx);
+  analogWrite(fwd_1, 0);
 }
 
 void reverse(){
   hold();
-  digitalWrite(rev_1, HIGH);
-  digitalWrite(rev_2, HIGH);
+  analogWrite(rev_1, -1*vx);
+  analogWrite(rev_2, -1*vx);
 }
 
 void hold(){
 
   set_low(fwd_1, fwd_2);
   set_low(rev_1, rev_2);
+  delay(50);
 }
 
 double microsecondsToCentimeters(double microseconds) {
