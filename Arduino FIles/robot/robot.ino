@@ -49,6 +49,8 @@ int az = 0;
 
 char buffer[100];
 
+int counter = 0;
+
 void velCallback(  const geometry_msgs::Twist& vel)
     {
         vx = (int)(vel.linear.x*255);
@@ -58,38 +60,54 @@ void velCallback(  const geometry_msgs::Twist& vel)
         ax = (int)(vel.angular.x*255);
         ay = (int)(vel.angular.y*255);
         az = (int)(vel.angular.z*255);
-      
+
+        dist = distance();
+        counter = 0;
+        
         nh.loginfo("Method Called");
         snprintf ( buffer, 100, "(Vx, Vy, Vz) = (%d, %d, %d)", vx, vy, vz);
         nh.loginfo(buffer);
         snprintf ( buffer, 100, "(ax, ay, az) = (%d, %d, %d)", ax, ay, az);
         nh.loginfo(buffer);
-        
-        if (vx >= 1 && az == 0) //Forward move.
+
+        if(dist < stopping_distance && !(dist < 0.1)){
+          snprintf ( buffer, 100, "Object detected at %d [mm]", (int)(dist*10));
+          nh.loginfo(buffer);
+          hold();
+        }
+        else{
+          if (vx >= 1 && az == 0) //Forward move.
           {
           set_low(rev_1, rev_2);
           forward();
           }
-        else if (vx <= -1 && az == 0)   //Backward move
-        {
-           set_low(fwd_1, fwd_2);
-           reverse();
-        }
-        else if(-1 < vx < 1 && az == 0)
-        {
-           set_low(rev_1, rev_2);
-           set_low(fwd_1, fwd_2);
-           hold();
-        }
-        else if(az >= 1 && vx == 0){
-          set_low(rev_1, rev_2);
-          set_low(fwd_1, fwd_2);
-          turn_left();
-        }
-        else if(az <= -1 && vx == 0){
-          set_low(rev_1, rev_2);
-           set_low(fwd_1, fwd_2);
-          turn_right();
+          else if (vx <= -1 && az == 0)   //Backward move
+          {
+             set_low(fwd_1, fwd_2);
+             reverse();
+          }
+          else if(-1 < vx < 1 && az == 0)
+          {
+             set_low(rev_1, rev_2);
+             set_low(fwd_1, fwd_2);
+             hold();
+          }
+          else if(az >= 1 && vx == 0){
+            set_low(rev_1, rev_2);
+            set_low(fwd_1, fwd_2);
+            turn_left();
+          }
+          else if(az <= -1 && vx == 0){
+            set_low(rev_1, rev_2);
+            set_low(fwd_1, fwd_2);
+            turn_right();
+          }
+          else{
+            set_low(rev_1, rev_2);
+            set_low(fwd_1, fwd_2);
+            hold();
+          }
+          
         }
 }
 
@@ -120,18 +138,31 @@ void setup(){
 
 
 void loop() {
-  dist = distance();
-  //snprintf ( buffer, 100, "D = %d [mm]", (int)(dist*100));
-  //nh.loginfo(buffer);
-  
-  //analogWrite(fwd_1, 255);
-  //analogWrite(fwd_2, 255);
   
   nh.spinOnce();
+  stop_car();
+
+  counter++;
+  snprintf ( buffer, 100, "Counter = %d", counter);
+  nh.loginfo(buffer);
+
+  if(counter > 150){
+    set_low(rev_1, rev_2);
+    set_low(fwd_1, fwd_2);
+    hold();
+  }
   
 }
 
-
+void stop_car(){
+  dist = distance();
+  if(dist < stopping_distance && !(dist < 0.1)){
+    snprintf ( buffer, 100, "Object detected at %d [mm]", (int)(dist*10));
+    nh.loginfo(buffer);
+    hold();
+  }
+  
+}
 
 template<typename T>
 void set_inputs(T first){
@@ -169,14 +200,14 @@ void forward(){
 
 void turn_left(){
   hold();
-  analogWrite(rev_1, -1*vx);
-  analogWrite(fwd_2, 0);
+  analogWrite(rev_1, az);
+  analogWrite(fwd_2, az);
 }
 
 void turn_right(){
   hold();
-  analogWrite(rev_2, -1*vx);
-  analogWrite(fwd_1, 0);
+  analogWrite(rev_2, -1*az);
+  analogWrite(fwd_1, -1*az);
 }
 
 void reverse(){
@@ -189,7 +220,7 @@ void hold(){
 
   set_low(fwd_1, fwd_2);
   set_low(rev_1, rev_2);
-  delay(50);
+  delay(10);
 }
 
 double microsecondsToCentimeters(double microseconds) {
