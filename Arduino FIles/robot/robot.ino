@@ -9,8 +9,7 @@ const int LED_pin = 13;
 // Ultrasonwsic Sensor Pins
 const int trigger_pin = 23;
 const int echo_pin = 22;
-const float stopping_distance = 8.0; // cm
-const float critical_distance = 4.0; // cm
+const float stopping_distance = 7.5; // cm
 
 // Motor Pins
 // Left
@@ -33,11 +32,13 @@ float joystick_X = 0.0;
 float joystick_Y = 0.0;
 float minval_range = 2.0;
 char input;
-
+ii
 // ROS Stuff
 ros::NodeHandle nh;
 std_msgs::String str_msg;
 ros::Publisher chatter("chatter", &str_msg);
+
+//ros::Timer my_timer = nh.createTimer(ros::Duration(1), callback);
 
 int vx = 0;
 int vy = 0;
@@ -53,6 +54,8 @@ int counter = 0;
 
 void velCallback(  const geometry_msgs::Twist& vel)
     {
+
+                
         vx = (int)(vel.linear.x*255);
         vy = (int)(vel.linear.y*255);
         vz = (int)(vel.linear.z*255);
@@ -62,7 +65,6 @@ void velCallback(  const geometry_msgs::Twist& vel)
         az = (int)(vel.angular.z*255);
 
         dist = distance();
-        counter = 0;
         
         nh.loginfo("Method Called");
         snprintf ( buffer, 100, "(Vx, Vy, Vz) = (%d, %d, %d)", vx, vy, vz);
@@ -70,49 +72,53 @@ void velCallback(  const geometry_msgs::Twist& vel)
         snprintf ( buffer, 100, "(ax, ay, az) = (%d, %d, %d)", ax, ay, az);
         nh.loginfo(buffer);
 
-        if(dist < stopping_distance && !(dist < 0.1)){
-          snprintf ( buffer, 100, "Object detected at %d [mm]", (int)(dist*10));
-          nh.loginfo(buffer);
-          hold();
+        if(stop_car()){
+          return;
         }
         else{
           if (vx >= 1 && az == 0) //Forward move.
           {
           set_low(rev_1, rev_2);
           forward();
+          counter = 0;
           }
           else if (vx <= -1 && az == 0)   //Backward move
           {
              set_low(fwd_1, fwd_2);
              reverse();
+             counter = 0;
           }
           else if(-1 < vx < 1 && az == 0)
           {
              set_low(rev_1, rev_2);
              set_low(fwd_1, fwd_2);
              hold();
+             counter = 0;
           }
           else if(az >= 1 && vx == 0){
             set_low(rev_1, rev_2);
             set_low(fwd_1, fwd_2);
             turn_left();
+            counter = 0;
           }
           else if(az <= -1 && vx == 0){
             set_low(rev_1, rev_2);
             set_low(fwd_1, fwd_2);
             turn_right();
+            counter = 0;
           }
           else{
             set_low(rev_1, rev_2);
             set_low(fwd_1, fwd_2);
             hold();
+            counter = 0;
           }
           
         }
 }
 
-ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", velCallback);
 
+ros::Subscriber<geometry_msgs::Twist> sub("cmd_vel", velCallback);
 
 void setup(){
  
@@ -141,27 +147,29 @@ void loop() {
   
   nh.spinOnce();
   stop_car();
-
-  counter++;
-  snprintf ( buffer, 100, "Counter = %d", counter);
-  nh.loginfo(buffer);
-
-  if(counter > 150){
-    set_low(rev_1, rev_2);
-    set_low(fwd_1, fwd_2);
-    hold();
-  }
-  
-}
-
-void stop_car(){
-  dist = distance();
-  if(dist < stopping_distance && !(dist < 0.1)){
-    snprintf ( buffer, 100, "Object detected at %d [mm]", (int)(dist*10));
+  if(counter >= 140){
+    snprintf ( buffer, 100, "Have not received a command for %d loops", counter);
     nh.loginfo(buffer);
     hold();
+    counter = 0;
   }
-  
+  counter++;
+}
+
+bool stop_car(){
+  dist = distance();
+  if(!free_path(dist) && !(dist < 0.1)){
+    snprintf ( buffer, 100, "Object detected at %d [cm]", (int)(dist));
+    nh.loginfo(buffer);
+    if (vx <= -1 && az == 0){
+      reverse();
+    }
+    else{
+      hold();  
+    }
+    return true;
+  }
+  return false;
 }
 
 template<typename T>
@@ -224,7 +232,7 @@ void hold(){
 }
 
 double microsecondsToCentimeters(double microseconds) {
-  return microseconds / 29 / 2;
+  return microseconds * 0.0343 / 2;
 }
 
 
@@ -254,27 +262,27 @@ bool free_path(float distance){
   }
 }
 
-void keyboard_to_movement(char input){
-
-  if(input == 'w'){
-    forward();
-    //Serial.print("^");
-  }
-  else if(input == 's'){
-    reverse();
-    //Serial.print("v");
-  }
-  else if(input == 'a'){
-    turn_left();
-    //Serial.print("<");
-  }
-  else if(input == 'd'){
-    turn_right();
-    //Serial.print(">");
-  }
-  else {
-    hold();
-    //Serial.print("X");
-  }  
-  //Serial.println();
-}
+//void keyboard_to_movement(char input){
+//
+//  if(input == 'w'){
+//    forward();
+//    //Serial.print("^");
+//  }
+//  else if(input == 's'){
+//    reverse();
+//    //Serial.print("v");
+//  }
+//  else if(input == 'a'){
+//    turn_left();
+//    //Serial.print("<");
+//  }
+//  else if(input == 'd'){
+//    turn_right();
+//    //Serial.print(">");
+//  }
+//  else {
+//    hold();
+//    //Serial.print("X");
+//  }  
+//  //Serial.println();
+//}
